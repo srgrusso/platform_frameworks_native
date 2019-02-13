@@ -4446,6 +4446,12 @@ void SurfaceFlinger::dumpAllLocked(const Vector<String16>& args, size_t& index,
     result.append("\n");
 
     /*
+     * Tracing state
+     */
+    mTracing.dump(result);
+    result.append("\n");
+
+    /*
      * HWC layer minidump
      */
     for (size_t d = 0; d < mDisplays.size(); d++) {
@@ -4792,12 +4798,12 @@ status_t SurfaceFlinger::onTransact(
             case 1025: { // Set layer tracing
                 n = data.readInt32();
                 if (n) {
-                    ALOGV("LayerTracing enabled");
+                    ALOGD("LayerTracing enabled");
                     mTracing.enable();
                     doTracing("tracing.enable");
                     reply->writeInt32(NO_ERROR);
                 } else {
-                    ALOGV("LayerTracing disabled");
+                    ALOGD("LayerTracing disabled");
                     status_t err = mTracing.disable();
                     reply->writeInt32(err);
                 }
@@ -5090,7 +5096,8 @@ void SurfaceFlinger::renderScreenImplLocked(const RenderArea& renderArea,
     if (sourceCrop.width() == 0 || sourceCrop.height() == 0 || !sourceCrop.isValid()) {
         sourceCrop.setLeftTop(Point(0, 0));
         sourceCrop.setRightBottom(Point(raWidth, raHeight));
-    } else if (mPrimaryDisplayOrientation != DisplayState::eOrientationDefault) {
+    } else if (mPrimaryDisplayOrientation != DisplayState::eOrientationDefault &&
+               renderArea.getCaptureFill() != RenderArea::CaptureFill::CLEAR) {
         Transform tr;
         uint32_t flags = 0x00;
         switch (mPrimaryDisplayOrientation) {
@@ -5130,7 +5137,8 @@ void SurfaceFlinger::renderScreenImplLocked(const RenderArea& renderArea,
     engine.checkErrors();
 
     Transform::orientation_flags rotation = renderArea.getRotationFlags();
-    if (mPrimaryDisplayOrientation != DisplayState::eOrientationDefault) {
+    if (mPrimaryDisplayOrientation != DisplayState::eOrientationDefault &&
+        renderArea.getCaptureFill() != RenderArea::CaptureFill::CLEAR) {
         // convert hw orientation into flag presentation
         // here inverse transform needed
         uint8_t hw_rot_90  = 0x00;
