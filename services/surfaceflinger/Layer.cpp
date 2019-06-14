@@ -51,7 +51,6 @@
 #include "MonitoredProducer.h"
 #include "SurfaceFlinger.h"
 #include "clz.h"
-#include "gralloc_priv.h"
 
 #include "DisplayHardware/HWComposer.h"
 
@@ -224,7 +223,6 @@ bool Layer::createHwcLayer(HWComposer* hwc, int32_t hwcId) {
     LayerBE::HWCInfo& hwcInfo = getBE().mHwcLayers[hwcId];
     hwcInfo.hwc = hwc;
     hwcInfo.layer = layer;
-    mLayerId = layer->getId();
     layer->setLayerDestroyedListener(
             [this, hwcId](HWC2::Layer* /*layer*/) { getBE().mHwcLayers.erase(hwcId); });
     return true;
@@ -484,13 +482,9 @@ FloatRect Layer::computeCrop(const sp<const DisplayDevice>& hw) const {
     return crop;
 }
 
-void Layer::setGeometry(const sp<const DisplayDevice>& displayDevice, uint32_t z) {
+void Layer::setGeometry(const sp<const DisplayDevice>& displayDevice, uint32_t z)
+{
     const auto hwcId = displayDevice->getHwcDisplayId();
-    if (!hasHwcLayer(hwcId)) {
-        ALOGE("[%s] failed to setGeometry: no HWC layer found (%d)",
-              mName.string(), hwcId);
-        return;
-    }
     auto& hwcInfo = getBE().mHwcLayers[hwcId];
 
     // enable this layer
@@ -863,11 +857,6 @@ void Layer::computeGeometry(const RenderArea& renderArea, Mesh& mesh,
 bool Layer::isSecure() const {
     const Layer::State& s(mDrawingState);
     return (s.flags & layer_state_t::eLayerSecure);
-}
-
-bool Layer::isSecureDisplay() const {
-    const sp<GraphicBuffer>& activeBuffer(mActiveBuffer);
-    return activeBuffer && (activeBuffer->getUsage() & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY);
 }
 
 void Layer::setVisibleRegion(const Region& visibleRegion) {
@@ -1912,8 +1901,7 @@ void Layer::commitChildList() {
     mDrawingParent = mCurrentParent;
 }
 
-void Layer::writeToProto(LayerProto* layerInfo, LayerVector::StateSet stateSet,
-                         bool enableRegionDump) {
+void Layer::writeToProto(LayerProto* layerInfo, LayerVector::StateSet stateSet) {
     const bool useDrawing = stateSet == LayerVector::StateSet::Drawing;
     const LayerVector& children = useDrawing ? mDrawingChildren : mCurrentChildren;
     const State& state = useDrawing ? mDrawingState : mCurrentState;
@@ -1936,12 +1924,10 @@ void Layer::writeToProto(LayerProto* layerInfo, LayerVector::StateSet stateSet,
         }
     }
 
-    if (enableRegionDump) {
-        LayerProtoHelper::writeToProto(state.activeTransparentRegion,
-                                       layerInfo->mutable_transparent_region());
-        LayerProtoHelper::writeToProto(visibleRegion, layerInfo->mutable_visible_region());
-        LayerProtoHelper::writeToProto(surfaceDamageRegion, layerInfo->mutable_damage_region());
-    }
+    LayerProtoHelper::writeToProto(state.activeTransparentRegion,
+                                   layerInfo->mutable_transparent_region());
+    LayerProtoHelper::writeToProto(visibleRegion, layerInfo->mutable_visible_region());
+    LayerProtoHelper::writeToProto(surfaceDamageRegion, layerInfo->mutable_damage_region());
 
     layerInfo->set_layer_stack(getLayerStack());
     layerInfo->set_z(state.z);
@@ -2008,10 +1994,6 @@ void Layer::writeToProto(LayerProto* layerInfo, LayerVector::StateSet stateSet,
 }
 
 void Layer::writeToProto(LayerProto* layerInfo, int32_t hwcId) {
-    if (!hasHwcLayer(hwcId)) {
-        return;
-    }
-
     writeToProto(layerInfo, LayerVector::StateSet::Drawing);
 
     const auto& hwcInfo = getBE().mHwcLayers.at(hwcId);

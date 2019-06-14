@@ -525,15 +525,10 @@ status_t DispSync::changePhaseOffset(Callback* callback, nsecs_t phase) {
 
 void DispSync::setPeriod(nsecs_t period) {
     Mutex::Autolock lock(mMutex);
+    mPeriod = period;
     mPhase = 0;
     mReferenceTime = 0;
-    if (!mPeriod || (mPeriod == period)) {
-      // Avoid model update if
-      // -- valid mPeriod exists
-      // -- mPeriod alone changes.
-      mThread->updateModel(period, mPhase, mReferenceTime);
-    }
-    mPeriod = period;
+    mThread->updateModel(mPeriod, mPhase, mReferenceTime);
 }
 
 nsecs_t DispSync::getPeriod() {

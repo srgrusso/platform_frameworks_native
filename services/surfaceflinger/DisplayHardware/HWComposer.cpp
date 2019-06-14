@@ -131,27 +131,23 @@ void HWComposer::validateChange(HWC2::Composition from, HWC2::Composition to) {
     }
 }
 
-bool HWComposer::onHotplug(hwc2_display_t displayId, int32_t displayType,
+void HWComposer::onHotplug(hwc2_display_t displayId, int32_t displayType,
                            HWC2::Connection connection) {
     if (displayType >= HWC_NUM_PHYSICAL_DISPLAY_TYPES) {
         ALOGE("Invalid display type of %d", displayType);
-        return false;
+        return;
     }
 
     ALOGV("hotplug: %" PRIu64 ", %s %s", displayId,
             displayType == DisplayDevice::DISPLAY_PRIMARY ? "primary" : "external",
             to_string(connection).c_str());
-    auto error =  mHwcDevice->onHotplug(displayId, connection);
-    if (error != HWC2::Error::None) {
-        return false;
-    }
+    mHwcDevice->onHotplug(displayId, connection);
     // Disconnect is handled through HWComposer::disconnectDisplay via
     // SurfaceFlinger's onHotplugReceived callback handling
     if (connection == HWC2::Connection::Connected) {
         mDisplayData[displayType].hwcDisplay = mHwcDevice->getDisplayById(displayId);
         mHwcDisplaySlots[displayId] = displayType;
     }
-    return true;
 }
 
 bool HWComposer::onVsync(hwc2_display_t displayId, int64_t timestamp,
@@ -589,7 +585,6 @@ status_t HWComposer::presentAndGetReleaseFences(int32_t displayId) {
         return NO_ERROR;
     }
 
-    displayData.lastPresentFence = Fence::NO_FENCE;
     auto error = hwcDisplay->present(&displayData.lastPresentFence);
     RETURN_IF_HWC_ERROR_FOR("present", error, displayId, UNKNOWN_ERROR);
 
@@ -612,6 +607,10 @@ status_t HWComposer::setPowerMode(int32_t displayId, int32_t intMode) {
     }
 
     auto mode = static_cast<HWC2::PowerMode>(intMode);
+    if (mode == HWC2::PowerMode::Off) {
+        setVsyncEnabled(displayId, HWC2::Vsync::Disable);
+    }
+
     auto& hwcDisplay = mDisplayData[displayId].hwcDisplay;
     switch (mode) {
         case HWC2::PowerMode::Off:

@@ -137,7 +137,6 @@ public:
     bool                    isPrimary() const { return mType == DISPLAY_PRIMARY; }
     int32_t                 getHwcDisplayId() const { return mHwcDisplayId; }
     const wp<IBinder>&      getDisplayToken() const { return mDisplayToken; }
-    uint32_t                getPanelMountFlip() const { return mPanelMountFlip; }
 
     int32_t getSupportedPerFrameMetadata() const { return mSupportedPerFrameMetadata; }
 
@@ -253,7 +252,7 @@ private:
     /*
      * Transaction state
      */
-    status_t orientationToTransfrom(int orientation,
+    static status_t orientationToTransfrom(int orientation,
             int w, int h, Transform* tr);
 
     // The identifier of the active layer stack for this display. Several displays
@@ -275,8 +274,6 @@ private:
     int mPowerMode;
     // Current active config
     int mActiveConfig;
-    // Panel's mount flip, H, V or 180 (HV)
-    uint32_t mPanelMountFlip;
     // current active color mode
     ui::ColorMode mActiveColorMode = ui::ColorMode::NATIVE;
     // Current active render intent.
@@ -361,9 +358,6 @@ public:
     bool isSecure() const override { return mDevice->isSecure(); }
     bool needsFiltering() const override { return mDevice->needsFiltering(); }
     Rect getSourceCrop() const override { return mSourceCrop; }
-    int32_t getDisplayType() { return mDevice->getDisplayType(); }
-    uint32_t getPanelMountFlip() { return mDevice->getPanelMountFlip(); }
-    std::string getType() const override { return "DisplayRenderArea"; }
 
 private:
     const sp<const DisplayDevice> mDevice;

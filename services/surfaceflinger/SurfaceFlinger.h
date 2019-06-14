@@ -77,7 +77,6 @@
 #include <string>
 #include <thread>
 #include <utility>
-#include <bitset>
 #include "RenderArea.h"
 
 #include <layerproto/LayerProtoHeader.h>
@@ -286,7 +285,6 @@ public:
     // This also allows devices with wide-color displays that don't
     // want to support color management to disable color management.
     static bool hasWideColorDisplay;
-    friend class ExSurfaceFlinger;
 
     static char const* getServiceName() ANDROID_API {
         return "SurfaceFlinger";
@@ -321,8 +319,6 @@ public:
         Mutex::Autolock _l(mStateLock);
         return getDefaultDisplayDeviceLocked();
     }
-
-    virtual bool IsHWCDisabled() { return false; }
 
     // Obtains a name from the texture pool, or, if the pool is empty, posts a
     // synchronous message to the main thread to obtain one on the fly
@@ -409,7 +405,6 @@ private:
     virtual status_t onTransact(uint32_t code, const Parcel& data,
         Parcel* reply, uint32_t flags);
     virtual status_t dump(int fd, const Vector<String16>& args) { return priorityDump(fd, args); }
-    virtual status_t doDump(int fd, const Vector<String16>& args, bool asProto);
 
     /* ------------------------------------------------------------------------
      * ISurfaceComposer interface
@@ -475,15 +470,6 @@ private:
     void onRefreshReceived(int32_t sequenceId, hwc2_display_t display) override;
 
     /* ------------------------------------------------------------------------
-     * Extensions
-     */
-    virtual void handleDPTransactionIfNeeded(
-                     const Vector<DisplayState>& /*displays*/) { }
-    virtual void setDisplayAnimating(const sp<const DisplayDevice>& /*hw*/) { }
-    virtual void handleMessageRefresh();
-    virtual void setLayerAsMask(const int32_t&, const uint64_t&) { };
-
-    /* ------------------------------------------------------------------------
      * Message handling
      */
     void waitForEvent();
@@ -512,6 +498,8 @@ private:
 
     // Returns whether a new buffer has been latched (see handlePageFlip())
     bool handleMessageInvalidate();
+
+    void handleMessageRefresh();
 
     void handleTransaction(uint32_t transactionFlags);
     void handleTransactionLocked(uint32_t transactionFlags);
@@ -671,9 +659,6 @@ private:
 
     void preComposition(nsecs_t refreshStartTime);
     void postComposition(nsecs_t refreshStartTime);
-    void forceResyncModel();
-    int getVsyncSource();
-    void UpdateSyncModel(int current_source, int next_source);
     void updateCompositorTiming(
             nsecs_t vsyncPhase, nsecs_t vsyncInterval, nsecs_t compositeTime,
             std::shared_ptr<FenceTime>& presentFenceTime);
@@ -747,8 +732,7 @@ private:
     void listLayersLocked(const Vector<String16>& args, size_t& index, String8& result) const;
     void dumpStatsLocked(const Vector<String16>& args, size_t& index, String8& result) const;
     void clearStatsLocked(const Vector<String16>& args, size_t& index, String8& result);
-    void dumpAllLocked(const Vector<String16>& args, size_t& index, String8& result,
-                                                                 bool enableRegionDump) const;
+    void dumpAllLocked(const Vector<String16>& args, size_t& index, String8& result) const;
     bool startDdmConnection();
     void appendSfConfigString(String8& result) const;
     void checkScreenshot(size_t w, size_t s, size_t h, void const* vaddr,
@@ -757,7 +741,6 @@ private:
     void logFrameStats();
 
     void dumpStaticScreenStats(String8& result) const;
-    virtual void dumpDrawCycle(bool /* prePrepare */ ) { }
     // Not const because each Layer needs to query Fences and cache timestamps.
     void dumpFrameEventsLocked(String8& result);
 
@@ -765,12 +748,13 @@ private:
             std::vector<OccupancyTracker::Segment>&& history);
     void dumpBufferingStats(String8& result) const;
     void dumpWideColorInfo(String8& result) const;
-    LayersProto dumpProtoInfo(LayerVector::StateSet stateSet, bool enableRegionDump = true) const;
+    LayersProto dumpProtoInfo(LayerVector::StateSet stateSet) const;
     LayersProto dumpVisibleLayersProtoInfo(int32_t hwcId) const;
 
     bool isLayerTripleBufferingDisabled() const {
         return this->mLayerTripleBufferingDisabled;
     }
+    status_t doDump(int fd, const Vector<String16>& args, bool asProto);
 
     /* ------------------------------------------------------------------------
      * VrFlinger
@@ -788,7 +772,6 @@ private:
 
     // access must be protected by mStateLock
     mutable Mutex mStateLock;
-    mutable Mutex mDolphinStateLock;
     State mCurrentState{LayerVector::StateSet::Current};
     volatile int32_t mTransactionFlags;
     Condition mTransactionCV;
@@ -855,13 +838,6 @@ private:
     DefaultKeyedVector< wp<IBinder>, sp<DisplayDevice> > mDisplays;
 
     // don't use a lock for these, we don't care
-    std::bitset<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES> mActiveDisplays;
-    std::bitset<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES> mVsyncSources;
-    std::bitset<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES> mBuiltInBitmask;
-    std::bitset<DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES> mPluggableBitmask;
-    std::mutex mVsyncPeriodMutex;
-    std::vector<nsecs_t> vsyncPeriod;
-    bool mUpdateVSyncSourceOnDoze = false;
     int mDebugRegion;
     int mDebugDDMS;
     int mDebugDisableHWC;
@@ -898,6 +874,7 @@ private:
     bool mHWVsyncAvailable;
 
     std::atomic<bool> mRefreshPending{false};
+
     // We maintain a pool of pre-generated texture names to hand out to avoid
     // layer creation needing to run on the main thread (which it would
     // otherwise need to do to access RenderEngine).
@@ -940,14 +917,6 @@ private:
     CreateNativeWindowSurfaceFunction mCreateNativeWindowSurface;
 
     SurfaceFlingerBE mBE;
-
-    bool mDolphinFuncsEnabled = false;
-    void *mDolphinHandle = nullptr;
-    void (*mDolphinOnFrameAvailable)(bool isTransparent, int num, int32_t width, int32_t height,
-                                     String8 name) = nullptr;
-    bool (*mDolphinInit)() = nullptr;
-    bool (*mDolphinMonitor)(int number) = nullptr;
-    void (*mDolphinRefresh)() = nullptr;
 };
 }; // namespace android
 
